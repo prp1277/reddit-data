@@ -1,0 +1,147 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "logicAppName": {
+      "type": "string",
+      "metadata": { "description": "Name of the logic app." }
+    },
+    "logicAppLocation": {
+      "defaultValue": "[resourceGroup().location]",
+      "allowedValues": [
+        "eastasia",
+        "southeastasia",
+        "centralus",
+        "eastus",
+        "eastus2",
+        "westus",
+        "northcentralus",
+        "southcentralus",
+        "northeurope",
+        "westeurope",
+        "japanwest",
+        "japaneast",
+        "brazilsouth",
+        "australiaeast",
+        "australiasoutheast",
+        "southindia",
+        "centralindia",
+        "westindia",
+        "canadacentral",
+        "canadaeast",
+        "westcentralus",
+        "westus2",
+        "[resourceGroup().location]"
+      ],
+      "type": "string",
+      "metadata": { "description": "Location of the logic app." }
+    },
+    "onedriveforbusiness_Connection_Name": {
+      "defaultValue": "onedriveforbusiness",
+      "type": "string",
+      "metadata": { "description": "Name of the connection." }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2016-06-01",
+      "name": "[parameters('logicAppName')]",
+      "location": "[parameters('logicAppLocation')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', parameters('onedriveforbusiness_Connection_Name'))]"
+      ],
+      "properties": {
+        "state": "Disabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": { "defaultValue": {}, "type": "Object" },
+            "$authentication": { "defaultValue": {}, "type": "SecureObject" }
+          },
+          "triggers": {
+            "Recurrence": {
+              "recurrence": {
+                "frequency": "Day",
+                "interval": 1,
+                "startTime": "2019-11-09T12:45:00.000Z"
+              },
+              "type": "Recurrence"
+            }
+          },
+          "actions": {
+            "Create_file": {
+              "runAfter": { "HTTP": ["Succeeded"] },
+              "metadata": {
+                "flowSystemMetadata": { "swaggerOperationId": "CreateFile" }
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['onedriveforbusiness']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": "@json(string(body('HTTP')))",
+                "path": "/datasets/default/files",
+                "queries": {
+                  "folderPath": "/Documents/IFTTT/Exports/WSB",
+                  "name": "@{utcNow()}.json"
+                },
+                "authentication": "@parameters('$authentication')"
+              },
+              "runtimeConfiguration": {
+                "contentTransfer": { "transferMode": "Chunked" }
+              }
+            },
+            "HTTP": {
+              "runAfter": {},
+              "type": "Http",
+              "inputs": {
+                "method": "GET",
+                "uri": "https://www.reddit.com/r/wallstreetbets/.json"
+              }
+            }
+          }
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "onedriveforbusiness": {
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'onedriveforbusiness')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('onedriveforbusiness_Connection_Name'))]",
+                "connectionName": "[parameters('onedriveforbusiness_Connection_Name')]"
+              }
+            }
+          }
+        },
+        "runtimeConfiguration": {
+          "lifetime": { "unit": "Day", "count": 30 },
+          "collections": { "maximumItemCount": 100000 },
+          "performanceProfile": { "throttles": { "mode": "Low" } },
+          "retryPolicy": {
+            "type": "Exponential",
+            "interval": "PT5M",
+            "count": 2,
+            "minimumInterval": "PT5M",
+            "maximumInterval": "PT1H"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[parameters('onedriveforbusiness_Connection_Name')]",
+      "location": "[parameters('logicAppLocation')]",
+      "properties": {
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'onedriveforbusiness')]"
+        },
+        "displayName": "[parameters('onedriveforbusiness_Connection_Name')]"
+      }
+    }
+  ]
+}
